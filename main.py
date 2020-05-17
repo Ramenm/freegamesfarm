@@ -26,7 +26,7 @@ logging.basicConfig(filename="farm.log", level=logging.INFO, filemode='a')
 
 class BaseDataClass():
     def __init__(self):
-        self.webdriver = Chrome(l)
+        self.webdriver = Chrome()
         self.firstname = ''.join(random.choice(string.ascii_lowercase) for i in range(9))
         self.lastname = ''.join(random.choice(string.ascii_lowercase) for i in range(9))
         self.login = f'{self.firstname}firstrev{self.lastname}'
@@ -62,9 +62,13 @@ class Yandex():
         webdriver.find_element_by_xpath(
             '//*[@id="root"]/div/div[2]/div/main/div/div/div/form/div[3]/div/div[2]/div/span').click()
         webdriver.find_element_by_xpath('//*[@id="hint_answer"]').send_keys('da')
+
+
+    def press_submit_button(self, webdriver):
         # solve the captcha
         try:
-            wait_for_element = WebDriverWait(webdriver, TIMEOUT).until_not(EC.url_contains('passport.yandex.ru/registration/mail'))
+            wait_for_element = WebDriverWait(webdriver, TIMEOUT).until_not(
+                EC.url_contains('passport.yandex.ru/registration/mail'))
         except selenium.common.exceptions.TimeoutException:
             raise errors.CaptchaFailedException('solve the captcha yandex.ru')
 
@@ -109,26 +113,30 @@ class Epicgamesstore():
         webdriver.find_element_by_xpath('//*[@id="email"]').send_keys(f'{self.login}@{yandexmaildns}')
         webdriver.find_element_by_xpath('//*[@id="password"]').send_keys(self.pswd)
         webdriver.find_element_by_xpath('//*[@id="termsOfService"]').click()
-        wait_for_element = WebDriverWait(webdriver, TIMEOUT).until(EC.element_to_be_clickable((By.XPATH, '//*[@id="btn-submit"]')))
-        webdriver.find_element_by_xpath('//*[@id="btn-submit"]').click()
 
-    def open_first_window(self, webdriver):
-        webdriver.get('https://www.epicgames.com/id/register')
+    def press_submit_button(self, webdriver):
+        wait_for_element = WebDriverWait(webdriver, TIMEOUT).until(
+            EC.element_to_be_clickable((By.XPATH, '//*[@id="btn-submit"]')))
+        webdriver.find_element_by_xpath('//*[@id="btn-submit"]').click()
 
 class Farmer():
     def run(self):
+        # a.webdriver.switch_to_window(a.webdriver.window_handles[EPICGAMES_PAGE_NUMBER])
+        # a.webdriver.switch_to_window(a.webdriver.window_handles[YANDEX_PAGE_NUMBER])
         a = BaseDataClass()
         self.dict = a.__dict__
         a.open_new_tab()
         a.get_all_atributes()
         yandex = Yandex(a)
         epicgames = Epicgamesstore(a)
-        a.webdriver.switch_to_window(a.webdriver.window_handles[EPICGAMES_PAGE_NUMBER])
-        epicgames.open_first_window(a.webdriver)
         a.webdriver.switch_to_window(a.webdriver.window_handles[YANDEX_PAGE_NUMBER])
         yandex.register(a.webdriver)
         a.webdriver.switch_to_window(a.webdriver.window_handles[EPICGAMES_PAGE_NUMBER])
         epicgames.register(a.webdriver)
+        a.webdriver.switch_to_window(a.webdriver.window_handles[YANDEX_PAGE_NUMBER])
+        yandex.press_submit_button(a.webdriver)
+        a.webdriver.switch_to_window(a.webdriver.window_handles[EPICGAMES_PAGE_NUMBER])
+        epicgames.press_submit_button(a.webdriver)
         a.webdriver.switch_to_window(a.webdriver.window_handles[YANDEX_PAGE_NUMBER])
         yandex.open_last_msg(a.webdriver)
         yandex._take_first_code(a.webdriver)
