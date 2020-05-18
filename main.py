@@ -11,11 +11,13 @@ from selenium.webdriver.support import expected_conditions as EC
 import errors
 import logging
 import time
+import re
 import os
 
 YANDEX_PAGE_NUMBER = 1-1
 EPICGAMES_PAGE_NUMBER = 2-1
 TIMEOUT = 2000
+REFRESH_SEC = 5
 
 logging.basicConfig(filename="farm.log", level=logging.INFO, filemode='a')
 
@@ -49,8 +51,7 @@ class Yandex():
         webdriver.get('https://passport.yandex.ru/registration/mail')
         # may include verification of a phone number or email
         try:
-            wait_for_page_load = WebDriverWait(webdriver, 4
-                                               ).until(EC.url_contains("registration/mail"))
+            wait_for_page_load = WebDriverWait(webdriver, 4).until(EC.url_contains("registration/mail"))
         except selenium.common.exceptions.TimeoutException:
             raise errors.BadIpRequestException('Try to change proxy or wait')
 
@@ -72,28 +73,32 @@ class Yandex():
         except selenium.common.exceptions.TimeoutException:
             raise errors.CaptchaFailedException('solve the captcha yandex.ru')
 
-    def open_last_msg(self, webdriver):
+    def take_code_from_msg(self, webdriver):
+        self.true_code = None
+        self.codes = []
         webdriver.get('https://mail.yandex.ru/lite')
         while True:
-            element = webdriver.find_elements_by_xpath('//*[@id="main"]/div/div[1]')
-            if  element == None:
-                break
-            else:
-                print(element)
+            elements = webdriver.find_elements_by_class_name('b-messages__message__left')
+            for i in range(len(elements)):
+                if re.findall('Epic Games', elements[i].text):
+                    element = elements[i]
+                    if element in self.codes:
+                        pass
+                    else:
+                        self.true_code = re.findall('(\d{6})', element.text)[0]
+                        self.codes.append(self.true_code)
+                        break
+                else:
+                    webdriver.refresh()
+                    time.sleep(REFRESH_SEC)
+            if len(elements) == 0:
                 webdriver.refresh()
-                time.sleep(3)
-        first_message = element
-        print(first_message)
-
-    def _take_first_code(self, webdriver):
-        webdriver.find_element_by_xpath(
-            '//*[@id="nb-1"]/body/div[9]/div/div/div/div/div/div/div/div[2]/div[4]/button[1]').click()
-        code = webdriver.find_element_by_xpath(
-            '//*[@id="nb-1"]/body/div[2]/div[5]/div/div[3]/div[3]/div[2]/div[5]/div[1]/div/div[3]/div/div/table/tbody/tr/td/center/table[2]/tbody/tr/td/table/tbody/tr/td/table/tbody/tr[3]/td/div')
-        code = code.get_attribute()
-        print(code)
-    def _take_2fa_code(self, webdriver):
-        pass
+                time.sleep(REFRESH_SEC)
+            elif self.true_code != None:
+                break
+        code = self.true_code
+        self.true_code = None
+        return code
 
 
 class Epicgamesstore():
@@ -103,7 +108,8 @@ class Epicgamesstore():
     def register(self, webdriver, yandexmaildns='yandex.ru'):
         webdriver.get('https://www.epicgames.com/id/register')
         try:
-            wait_for_element = WebDriverWait(webdriver, TIMEOUT).until(EC.visibility_of_element_located((By.ID, 'name')))
+            wait_for_element = WebDriverWait(webdriver, TIMEOUT).until(
+                EC.visibility_of_element_located((By.ID, 'name')))
         except selenium.common.exceptions.TimeoutException:
             raise errors.CaptchaFailedException('solve the captcha epicgames')
 
@@ -118,6 +124,29 @@ class Epicgamesstore():
         wait_for_element = WebDriverWait(webdriver, TIMEOUT).until(
             EC.element_to_be_clickable((By.XPATH, '//*[@id="btn-submit"]')))
         webdriver.find_element_by_xpath('//*[@id="btn-submit"]').click()
+
+    def code_1(self, webdriver, code: str):
+        webdriver.find_element_by_xpath('//*[@id="code"]').send_keys(code)
+        wait_for_element = WebDriverWait(webdriver, TIMEOUT).until(
+            EC.element_to_be_clickable((By.XPATH, '//*[@id="continue"]/span')))
+        webdriver.find_element_by_xpath('//*[@id="continue"]/span').click()
+
+    def code_2fa_open(self, webdriver):
+        webdriver.get('https://www.epicgames.com/account/password#2fa-signup')
+        wait_for_element = WebDriverWait(webdriver, TIMEOUT).until(
+            EC.element_to_be_clickable((
+                By.CLASS_NAME, 'btn btn-custom btn-submit-custom email-auth')))
+        webdriver.find_element_by_class_name(
+            'btn btn-custom btn-submit-custom email-auth').click()
+
+    def code_2fa_recieve(self, webdriver, code: str):
+        webdriver.find_element_by_xpath(
+            '//*[@id="emailChallengeModal"]/div[2]/div/div[3]/div/div/div/input').click()
+        webdriver.find_element_by_xpath(
+            '//*[@id="emailChallengeModal"]/div[2]/div/div[3]/div/div/div/input').send_keys(code)
+        webdriver.find_element_by_xpath('//*[@id="emailChallengeModal"]/div[2]/div/div[4]/div[2]/button').click()
+
+
 
 class Farmer():
     def run(self):
@@ -138,8 +167,20 @@ class Farmer():
         a.webdriver.switch_to_window(a.webdriver.window_handles[EPICGAMES_PAGE_NUMBER])
         epicgames.press_submit_button(a.webdriver)
         a.webdriver.switch_to_window(a.webdriver.window_handles[YANDEX_PAGE_NUMBER])
-        yandex.open_last_msg(a.webdriver)
-        yandex._take_first_code(a.webdriver)
+        first_code = yandex.take_code_from_msg(a.webdriver)
+        a.webdriver.switch_to_window(a.webdriver.window_handles[EPICGAMES_PAGE_NUMBER])
+        epicgames.code_1(a.webdriver, first_code)
+        time.sleep(2)
+        epicgames.code_2fa_open(a.webdriver)
+        a.webdriver.switch_to_window(a.webdriver.window_handles[YANDEX_PAGE_NUMBER])
+        second_code = yandex.take_code_from_msg(a.webdriver)
+        a.webdriver.switch_to_window(a.webdriver.window_handles[EPICGAMES_PAGE_NUMBER])
+        epicgames.code_2fa_recieve(a.webdriver, second_code)
+
+    def run_threaded(self, workers = 1):
+        for i in range(workers):
+            self.run()
+
 
 
 if __name__ == '__main__':
