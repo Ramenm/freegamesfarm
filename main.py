@@ -4,8 +4,8 @@ import re
 import string
 import threading
 import time
-
 import selenium
+from selenium import webdriver
 from selenium.webdriver import Chrome
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
@@ -18,17 +18,18 @@ YANDEX_PAGE_NUMBER = 1-1
 EPICGAMES_PAGE_NUMBER = 2-1
 TIMEOUT = 4000
 REFRESH_SEC = 4
+PROXY = '82.200.233.4:3128'
 
 logging.basicConfig(filename="farm.log", level=logging.INFO, filemode='a')
 
-# yandex captcha without js be more easy but epicgames without js cant load
-# chrome_options = Options()
-# chrome_options.add_experimental_option( "prefs",{'profile.managed_default_content_settings.javascript': 2})
-# chrome = webdriver.Chrome('chromedriver',chrome_options=chrome_options)
+
+
+chrome_options = webdriver.ChromeOptions()
+chrome_options.add_argument('--proxy-server=%s' % PROXY)
 
 class BaseDataClass():
     def __init__(self):
-        self.webdriver = Chrome()
+        self.webdriver = Chrome(chrome_options=chrome_options)
         self.firstname = ''.join(random.choice(string.ascii_lowercase) for i in range(9))
         self.lastname = ''.join(random.choice(string.ascii_lowercase) for i in range(9))
         self.login = f'{self.firstname}secondrev{self.lastname}'
@@ -74,6 +75,8 @@ class Yandex():
         webdriver.find_element_by_xpath('//*[@id="password_confirm"]').send_keys(self.pswd)
         webdriver.find_element_by_xpath(
             '//*[@id="root"]/div/div[2]/div/main/div/div/div/form/div[3]/div/div[2]/div/span').click()
+        wait_for_element = WebDriverWait(webdriver, TIMEOUT).until(EC.element_to_be_clickable((
+            By.XPATH, '//*[@id="hint_answer"]')))
         webdriver.find_element_by_xpath('//*[@id="hint_answer"]').send_keys('da')
 
 
@@ -85,29 +88,26 @@ class Yandex():
         except selenium.common.exceptions.TimeoutException:
             raise errors.CaptchaFailedException('solve the captcha yandex.ru')
 
-    def pop_code_from_msg(self, webdriver):
+    def last_code_from_msg(self, webdriver):
         self.true_code = None
         self.codes = []
         webdriver.get('https://mail.yandex.ru/lite')
-        while True:
+        while self.true_code == None:
             elements = webdriver.find_elements_by_class_name('b-messages__message__left')
             for i in range(len(elements)):
                 if re.findall('Epic Games', elements[i].text):
-                    element = elements[i]
+                    element = elements[i].text
                     if element in self.codes:
                         pass
                     else:
-                        self.true_code = re.findall('(\d{6})', element.text)[0]
+                        self.true_code = re.findall('(\d{6})', element)[0]
                         self.codes.append(self.true_code)
-                        break
                 else:
                     webdriver.refresh()
                     time.sleep(REFRESH_SEC)
             if len(elements) == 0:
                 webdriver.refresh()
                 time.sleep(REFRESH_SEC)
-            elif self.true_code != None:
-                break
         code = self.true_code
         self.true_code = None
         return code
@@ -138,6 +138,8 @@ class Epicgamesstore():
         webdriver.find_element_by_xpath('//*[@id="btn-submit"]').click()
 
     def code_1(self, webdriver, code: str):
+        wait_for_element = WebDriverWait(webdriver, TIMEOUT).until(
+            EC.element_to_be_clickable((By.XPATH, '//*[@id="code"]')))
         webdriver.find_element_by_xpath('//*[@id="code"]').send_keys(code)
         wait_for_element = WebDriverWait(webdriver, TIMEOUT).until(
             EC.element_to_be_clickable((By.XPATH, '//*[@id="continue"]/span')))
@@ -146,14 +148,19 @@ class Epicgamesstore():
     def code_2fa_open(self, webdriver):
         webdriver.get('https://www.epicgames.com/account/password#2fa-signup')
         wait_for_element = WebDriverWait(webdriver, TIMEOUT).until(
-            EC.element_to_be_clickable((
-                By.CLASS_NAME, 'btn-submit-custom')))
-        webdriver.find_elements_by_class_name(
-            'btn-submit-custom')[2].click()
+            EC.element_to_be_clickable((By.CLASS_NAME, 'btn-submit-custom')))
+        buttons = webdriver.find_elements_by_class_name('btn-submit-custom')
+        for i in buttons:
+            if re.findall('((E|e)mail)',i.text):
+                i.click()
+            else:
+                print('No buttons')
 
     def code_2fa_recieve(self, webdriver, code: str):
+        wait_for_element = WebDriverWait(webdriver, TIMEOUT).until(EC.element_to_be_clickable((
+                By.XPATH, '//*[@id="passwordView"]/div[2]/div/div/div[2]/div/div/div[3]/div/div/div/div[7]/button')))
         webdriver.find_element_by_xpath(
-            '//*[@id="emailChallengeModal"]/div[2]/div/div[3]/div/div/div/input').click()
+            '//*[@id="passwordView"]/div[2]/div/div/div[2]/div/div/div[3]/div/div/div/div[7]/button').click()
         webdriver.find_element_by_xpath(
             '//*[@id="emailChallengeModal"]/div[2]/div/div[3]/div/div/div/input').send_keys(code)
         webdriver.find_element_by_xpath('//*[@id="emailChallengeModal"]/div[2]/div/div[4]/div[2]/button').click()
@@ -181,18 +188,19 @@ class Farmer():
             a.webdriver.switch_to_window(a.webdriver.window_handles[EPICGAMES_PAGE_NUMBER])
             epicgames.press_submit_button(a.webdriver)
             a.webdriver.switch_to_window(a.webdriver.window_handles[YANDEX_PAGE_NUMBER])
-            first_code = yandex.take_code_from_msg(a.webdriver)
+            first_code = yandex.last_code_from_msg(a.webdriver)
             a.webdriver.switch_to_window(a.webdriver.window_handles[EPICGAMES_PAGE_NUMBER])
             epicgames.code_1(a.webdriver, first_code)
             time.sleep(2)
             epicgames.code_2fa_open(a.webdriver)
             a.webdriver.switch_to_window(a.webdriver.window_handles[YANDEX_PAGE_NUMBER])
-            second_code = yandex.take_code_from_msg(a.webdriver)
+            second_code = yandex.last_code_from_msg(a.webdriver)
             a.webdriver.switch_to_window(a.webdriver.window_handles[EPICGAMES_PAGE_NUMBER])
             epicgames.code_2fa_recieve(a.webdriver, second_code)
             a.save_to_log_file()
         finally:
-            a.close_webdriver()
+            pass
+            # a.close_webdriver()
 
     def run_threaded(self, workers = 1):
         for i in range(workers):
@@ -211,4 +219,4 @@ class Farmer():
 
 if __name__ == '__main__':
     farm = Farmer()
-    farm.run_threaded(1)
+    farm.run_threaded(5)
