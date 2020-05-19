@@ -38,6 +38,7 @@ class BaseDataClass():
         self.epicgames_login = self.login[:15]
         self.epicgames_pswd = self.pswd
     def save_to_log_file(self):
+        print(self.status)
         for i in self.__dict__:
             logging.info(f' {i} - {getattr(self, i)}')
         logging.info(' ' + '-'*100)
@@ -97,9 +98,12 @@ class Yandex():
         while self.first_code == None:
             elements = webdriver.find_elements_by_class_name('b-messages__message__left')
             for i in range(len(elements)):
-                element = elements[i].text
-                if len(re.findall('! (\d{6})', element)) != 0:
-                    self.first_code = re.findall('! (\d{6})', element)[0]
+                try:
+                    element = elements[i].text
+                    if len(re.findall('! (\d{6})', element)) != 0:
+                        self.first_code = re.findall('! (\d{6})', element)[0]
+                except:
+                    pass
                 else:
                     time.sleep(REFRESH_SEC)
                     webdriver.refresh()
@@ -115,9 +119,12 @@ class Yandex():
             elements = webdriver.find_elements_by_class_name('b-messages__message__left')
             for i in range(len(elements)):
                 time.sleep(2)
-                element = elements[i].text
-                if len(re.findall(': (\d{6})', element)) != 0:
-                    self.second_code = re.findall(': (\d{6})', element)[0]
+                try:
+                    element = elements[i].text
+                    if len(re.findall(': (\d{6})', element)) != 0:
+                        self.second_code = re.findall(': (\d{6})', element)[0]
+                except:
+                    pass
                 else:
                     time.sleep(REFRESH_SEC)
                     webdriver.refresh()
@@ -144,9 +151,13 @@ class Yandex():
             elements = webdriver.find_elements_by_class_name('b-messages__message__left')
             for i in range(len(elements)):
                 time.sleep(2)
-                element = elements[i].text
-                if len(re.findall('https://accounts.epicgames.com/resetPassword\?code=(\w{32})', element)) != 0:
-                    self.restore_link = re.findall('https://accounts.epicgames.com/resetPassword\?code=(\w{32})', element)[0]
+                try:
+                    element = elements[i].text
+                    if len(re.findall('https://accounts.epicgames.com/resetPassword\?code=(\w{32})', element)) != 0:
+                        self.restore_link = \
+                        re.findall('https://accounts.epicgames.com/resetPassword\?code=(\w{32})', element)[0]
+                except:
+                    pass
                 else:
                     time.sleep(REFRESH_SEC)
                     webdriver.refresh()
@@ -193,13 +204,10 @@ class Epicgamesstore():
         webdriver.get('https://www.epicgames.com/account/password#2fa-signup')
         wait_for_element = WebDriverWait(webdriver, TIMEOUT).until(
             EC.element_to_be_clickable((By.CLASS_NAME, 'btn-submit-custom')))
-        time.sleep(2)
         buttons = webdriver.find_elements_by_class_name('btn-submit-custom')
         for i in buttons:
             if re.findall('((E|e)mail)',i.text):
                 i.click()
-            else:
-                continue
         wait_for_element = WebDriverWait(webdriver, TIMEOUT).until(EC.element_to_be_clickable((
             By.CLASS_NAME, 'input challengeEmailCode')))
         print(wait_for_element)
@@ -220,22 +228,48 @@ class Epicgamesstore():
         self.status = 'Gta5 getted'
 
     def auth_with_data(self, webdriver, epicgames_login, epicgames_pswd):
-        webdriver.get('https://www.epicgames.com/id/login')
-        wait_for_element = WebDriverWait(webdriver, TIMEOUT).until(
-            EC.element_to_be_clickable((By.ID, 'usernameOrEmail')))
-        time.sleep(3)
+        webdriver.get('https://www.epicgames.com/id/login?redirectUrl=https%3A%2F%2Fwww.epicgames.com%2Fstore%2Fru%2F&noHostRedirect=true')
+        wait_for_element = WebDriverWait(webdriver, TIMEOUT).until(EC.element_to_be_clickable((By.ID, 'usernameOrEmail')))
         print(wait_for_element)
+        webdriver.find_element_by_id('usernameOrEmail').click()
         webdriver.find_element_by_id('usernameOrEmail').send_keys(epicgames_login)
-        webdriver.find_element_by_id('password').send_keys(epicgames_pswd + Keys.RETURN)
-        if re.findall('(\w+)-(\w+)-(\w+)-(\w+)-(\w+)', webdriver.find_element_by_tag_name('body').text):
+        webdriver.find_element_by_id('password').send_keys(epicgames_pswd)
+        wait_for_element = WebDriverWait(webdriver, TIMEOUT).until(
+            EC.element_to_be_clickable((By.ID, 'login')))
+        webdriver.find_element_by_id('login').send_keys(Keys.RETURN)
+        print('ret')
+        time.sleep(15)
+        if re.findall('(\w+)-(\w+)-(\w+)', webdriver.find_element_by_tag_name('body').text):
             return 'need_reset'
         return 'ok'
+
+    def request_to_reset_pswd(self, webdriver):
+        webdriver.get('https://www.epicgames.com/id/login/forgot-password')
+        wait_for_element = WebDriverWait(webdriver, TIMEOUT).until(
+            EC.element_to_be_clickable((By.ID, 'email')))
+        print(wait_for_element)
+        webdriver.find_element_by_id('email').click()
+        # YANDEXDNS CHANGE IN FUTURE
+        webdriver.find_element_by_id('email').send_keys(self.epicgames_login + '@yandex.ru')
+        wait_for_element = WebDriverWait(webdriver, TIMEOUT).until(
+            EC.element_to_be_clickable((By.ID, 'send')))
+        webdriver.find_element_by_id('send').send_keys(Keys.RETURN)
+
+    def reset_pswd(self, webdriver, link, new_epicgames_pswd=None):
+        if new_epicgames_pswd == None:
+            self.new_epicgames_pswd == self.epicgames_pswd + '1'
+        else:
+            self.new_epicgames_pswd == new_epicgames_pswd
+        webdriver.get(link)
+        # self.status = 'epicgames_pswd_reseted'
+
+
 
 class Farmer():
     # TODO compare run and run with data methods
     # TODO remove a.webdriver?
     workers_list = []
-    def run(self):
+    def _run_without_data(self):
         try:
             a = BaseDataClass()
             self.dict = a.__dict__
@@ -257,7 +291,6 @@ class Farmer():
             first_code = yandex.take_first_code(a.webdriver)
             a.webdriver.switch_to_window(a.webdriver.window_handles[EPICGAMES_PAGE_NUMBER])
             epicgames.code_1(a.webdriver, first_code)
-            time.sleep(2)
             epicgames.code_2fa_open(a.webdriver)
             a.webdriver.switch_to_window(a.webdriver.window_handles[YANDEX_PAGE_NUMBER])
             second_code = yandex.take_second_code(a.webdriver)
@@ -270,7 +303,7 @@ class Farmer():
             else:
                 pass
             # a.close_webdriver()
-    def run_with_data(self, login, pswd, epicgames_login = None, epicgames_pswd = None):
+    def _run_with_data(self, login, pswd, epicgames_login = None, epicgames_pswd = None):
         try:
             a = BaseDataClass()
             self.dict = a.__dict__
@@ -294,9 +327,15 @@ class Farmer():
                 a.webdriver.switch_to_window(a.webdriver.window_handles[EPICGAMES_PAGE_NUMBER])
                 epicgames.code_1(a.webdriver, first_code)
             else:
-                status_code = epicgames.auth_with_data(a.webdriver, epicgames_login, epicgames_pswd)
+                status_code = epicgames.auth_with_data(a.webdriver, epicgames_login, pswd)
+                a.webdriver.switch_to_window(a.webdriver.window_handles[EPICGAMES_PAGE_NUMBER])
                 if status_code == 'need_reset':
-                    yandex.link_to_reset_pswd(a.webdriver)
+                    epicgames.request_to_reset_pswd(a.webdriver)
+                    a.webdriver.switch_to_window(a.webdriver.window_handles[YANDEX_PAGE_NUMBER])
+                    link = yandex.link_to_reset_pswd(a.webdriver)
+                a.webdriver.switch_to_window(a.webdriver.window_handles[EPICGAMES_PAGE_NUMBER])
+                epicgames.reset_pswd(a.webdriver, link)
+
             time.sleep(2)
             epicgames.code_2fa_open(a.webdriver)
             a.webdriver.switch_to_window(a.webdriver.window_handles[YANDEX_PAGE_NUMBER])
@@ -306,19 +345,23 @@ class Farmer():
             epicgames.get_gta_V(a.webdriver)
         finally:
             if a.status != 'Init':
-                for i in a.__dict__:
-                    logging.info(f' {i} - {getattr(a, i)}')
-                logging.info(' ' + '-'*100)
+                a.save_to_log_file()
             else:
                 pass
             # a.close_webdriver()
 
-    def run_threaded(self, workers = 1):
-        for i in range(workers):
-            self.add_worker()
+    def run(self, login = None, pswd = None, epicgames_login = None, epicgames_pswd = None):
+        if login == None and pswd == None:
+            self._run_without_data()
+        else:
+            self._run_with_data(login, pswd, epicgames_login, epicgames_pswd)
 
-    def add_worker(self):
-        thread = threading.Thread(target=self.run)
+    def run_threaded(self, workers = 1, *args):
+        for i in range(workers):
+            self.add_worker(*args)
+
+    def add_worker(self, args):
+        thread = threading.Thread(target=self.run())
         self.workers_list.append(thread)
         thread.start()
 
@@ -327,6 +370,9 @@ class Farmer():
             print(i)
 
 
+
+
+
 if __name__ == '__main__':
     farm = Farmer()
-    farm.run_with_data('nlvcurnAizeojqd', '3zh8cy27w91c7jn9op', 'nlvcurnAizeojqd', '3zh8cy27w91c7jn9op3')
+    farm.run()
