@@ -11,7 +11,6 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
-
 import errors
 
 YANDEX_PAGE_NUMBER = 1-1
@@ -201,19 +200,19 @@ class Epicgamesstore():
         self.status = 'Epicgames account registered'
 
     def code_2fa_open(self, webdriver):
-        webdriver.get('https://www.epicgames.com/account/password#2fa-signup')
+        webdriver.get('https://www.epicgames.com/account/password')
         wait_for_element = WebDriverWait(webdriver, TIMEOUT).until(
-            EC.element_to_be_clickable((By.CLASS_NAME, 'btn-submit-custom')))
-        buttons = webdriver.find_elements_by_class_name('btn-submit-custom')
+            EC.element_to_be_clickable((By.CLASS_NAME, 'btn-custom btn-submit-custom email-auth')))
+        buttons = webdriver.find_elements_by_class_name('btn-custom btn-submit-custom email-auth')
         for i in buttons:
-            if re.findall('((E|e)mail)',i.text):
+            if re.findall('((E|e)mail)|((П|п)очте)',i.text):
                 i.click()
         wait_for_element = WebDriverWait(webdriver, TIMEOUT).until(EC.element_to_be_clickable((
             By.CLASS_NAME, 'input challengeEmailCode')))
-        print(wait_for_element)
 
     def code_2fa_recieve(self, webdriver, code: str):
-        time.sleep(4)
+        wait_for_element = WebDriverWait(webdriver, TIMEOUT).until(
+            EC.element_to_be_clickable((By.CLASS_NAME, 'input challengeEmailCode')))
         webdriver.find_element_by_class_name('input challengeEmailCode').click()
         webdriver.find_element_by_class_name('input challengeEmailCode').send_keys(code + Keys.RETURN)
         self.status = 'Epicgames 2fa activated'
@@ -230,15 +229,13 @@ class Epicgamesstore():
     def auth_with_data(self, webdriver, epicgames_login, epicgames_pswd):
         webdriver.get('https://www.epicgames.com/id/login?redirectUrl=https%3A%2F%2Fwww.epicgames.com%2Fstore%2Fru%2F&noHostRedirect=true')
         wait_for_element = WebDriverWait(webdriver, TIMEOUT).until(EC.element_to_be_clickable((By.ID, 'usernameOrEmail')))
-        print(wait_for_element)
         webdriver.find_element_by_id('usernameOrEmail').click()
         webdriver.find_element_by_id('usernameOrEmail').send_keys(epicgames_login)
         webdriver.find_element_by_id('password').send_keys(epicgames_pswd)
         wait_for_element = WebDriverWait(webdriver, TIMEOUT).until(
             EC.element_to_be_clickable((By.ID, 'login')))
         webdriver.find_element_by_id('login').send_keys(Keys.RETURN)
-        print('ret')
-        time.sleep(15)
+        time.sleep(30)
         if re.findall('(\w+)-(\w+)-(\w+)', webdriver.find_element_by_tag_name('body').text):
             return 'need_reset'
         return 'ok'
@@ -331,12 +328,14 @@ class Farmer():
                 a.webdriver.switch_to_window(a.webdriver.window_handles[EPICGAMES_PAGE_NUMBER])
                 if status_code == 'need_reset':
                     epicgames.request_to_reset_pswd(a.webdriver)
-                    a.webdriver.switch_to_window(a.webdriver.window_handles[YANDEX_PAGE_NUMBER])
+                a.webdriver.switch_to_window(a.webdriver.window_handles[YANDEX_PAGE_NUMBER])
+                if status_code == 'need_reset':
                     link = yandex.link_to_reset_pswd(a.webdriver)
                 a.webdriver.switch_to_window(a.webdriver.window_handles[EPICGAMES_PAGE_NUMBER])
-                epicgames.reset_pswd(a.webdriver, link)
+                if status_code == 'need_reset':
+                    epicgames.reset_pswd(a.webdriver, link)
 
-            time.sleep(2)
+
             epicgames.code_2fa_open(a.webdriver)
             a.webdriver.switch_to_window(a.webdriver.window_handles[YANDEX_PAGE_NUMBER])
             second_code = yandex.take_second_code(a.webdriver)
@@ -368,8 +367,6 @@ class Farmer():
     def check_workers(self):
         for i in self.workers_list:
             print(i)
-
-
 
 
 
